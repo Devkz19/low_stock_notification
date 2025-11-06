@@ -61,35 +61,31 @@ class ProductProduct(models.Model):
 
         # ✅ 5. Generate PDF report ONCE for both email and Discuss
         _logger.info("\n" + "=" * 80)
-        _logger.info("📄 STEP 5: GENERATING PDF ATTACHMENT - STARTING NOW")
+        _logger.info("📄 STEP 5: Generating Low Stock Report PDF")
         _logger.info("=" * 80)
-        
-        pdf_attachment = None
-        
-        try:
-            _logger.info("   Step 5.1: Getting report by name...")
-            report = self.env['ir.actions.report']._get_report_from_name('low_stock_notification.low_stock_report_template')
-            _logger.info(f"   ✅ Report object retrieved: {report}")
-            
-            _logger.info("   Step 5.2: Calling _render_qweb_pdf([])...")
-            pdf_result = report._render_qweb_pdf([])
-            _logger.info(f"   ✅ _render_qweb_pdf returned: {type(pdf_result)}")
-            
-            if isinstance(pdf_result, tuple):
-                pdf_content = pdf_result[0]
-                _logger.info(f"   ✅ Extracted PDF content from tuple: {len(pdf_content)} bytes")
-            else:
-                pdf_content = pdf_result
-                _logger.info(f"   ✅ PDF content (direct): {len(pdf_content)} bytes")
-            
-            _logger.info("   Step 5.3: Encoding to base64...")
-            pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
-            _logger.info(f"   ✅ Base64 encoded: {len(pdf_base64)} characters")
-            
-            attachment_name = f'Low_Stock_Report_{company.name}.pdf'
-            _logger.info(f"   Step 5.4: Creating attachment '{attachment_name}'...")
 
-            # Create attachment directly (no search for existing)
+        pdf_attachment = None
+        try:
+            # ✅ Get the report XML ID
+            report_xmlid = 'low_stock_notification.action_low_stock_report'
+            
+            # ✅ Fetch the report action record (for logging only)
+            report_action = self.env.ref(report_xmlid)
+            _logger.info(f"   ✅ Report action found: {report_action.report_name}")
+
+            # ✅ CORRECT for Odoo 19: Pass report_ref as first positional argument
+            pdf_bytes, _ = self.env['ir.actions.report']._render_qweb_pdf(
+                report_xmlid,  # report_ref (required positional argument)
+                res_ids=[],    # res_ids (keyword argument)
+                data={}        # data (keyword argument)
+            )
+            _logger.info(f"   ✅ PDF generated successfully — size: {len(pdf_bytes)} bytes")
+
+            # ✅ Encode PDF content
+            pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            attachment_name = f"Low_Stock_Report_{company.name or 'Company'}.pdf"
+
+            # ✅ Create ir.attachment for Discuss
             pdf_attachment = self.env['ir.attachment'].create({
                 'name': attachment_name,
                 'type': 'binary',
@@ -98,21 +94,15 @@ class ProductProduct(models.Model):
                 'res_id': company.id,
                 'mimetype': 'application/pdf',
             })
-            _logger.info(f"   ✅ Attachment created successfully!")
-            _logger.info(f"      ID: {pdf_attachment.id}")
-            _logger.info(f"      Name: {pdf_attachment.name}")
-            _logger.info(f"      Exists: {pdf_attachment.exists()}")
-            
+            _logger.info(f"   ✅ PDF attachment created (ID={pdf_attachment.id}, Name={pdf_attachment.name})")
+
         except Exception as e:
-            _logger.error("   ❌ EXCEPTION IN STEP 5:", exc_info=True)
-            _logger.error(f"   Error message: {str(e)}")
+            _logger.error("   ❌ PDF generation failed", exc_info=True)
             pdf_attachment = None
-        
+
         _logger.info("=" * 80)
         _logger.info(f"📄 STEP 5 COMPLETE: pdf_attachment = {pdf_attachment}")
         _logger.info(f"   Attachment is None: {pdf_attachment is None}")
-        if pdf_attachment:
-            _logger.info(f"   Attachment ID: {pdf_attachment.id}")
         _logger.info("=" * 80 + "\n")
 
         # ✅ 6. Send mail to each user
