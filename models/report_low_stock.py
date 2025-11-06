@@ -192,6 +192,7 @@ class ReportLowStock(models.AbstractModel):
             'doc_model': 'product.product',
             'docs': low_stock_products,
             'company': company,
+            'res_company': company, 
             'notification_based_on': notification_based_on,
             'quantity_limit': quantity_limit,
             'apply_on': apply_on,

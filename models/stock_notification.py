@@ -155,54 +155,63 @@ class ProductProduct(models.Model):
         _logger.info("=" * 80)
         _logger.info(f"   pdf_attachment = {pdf_attachment}")
         _logger.info(f"   pdf_attachment is None: {pdf_attachment is None}")
-        if pdf_attachment:
-            _logger.info(f"   Attachment ID: {pdf_attachment.id}")
-            _logger.info(f"   Attachment exists: {pdf_attachment.exists()}")
 
         Partner = self.env['res.partner'].sudo()
         ICP = self.env['ir.config_parameter'].sudo()
         DiscussChannel = self.env['discuss.channel'].sudo()
 
+        # 🧩 Ensure Discuss module is available
         if 'discuss.channel' not in self.env:
-            _logger.warning("   ⚠️ discuss.channel model not available")
+            _logger.warning("   ⚠️ Discuss module not installed — skipping message post.")
             return mail_ids
 
-        odoobot_id = ICP.get_param('mail.odoobot_partner_id')
+        # 🧩 Get or create OdooBot partner
         odoobot_partner = False
+        odoobot_id = ICP.get_param('mail.odoobot_partner_id')
         if odoobot_id:
             odoobot_partner = Partner.browse(int(odoobot_id)).exists()
+
         if not odoobot_partner:
             odoobot_partner = Partner.search([('name', '=', 'OdooBot')], limit=1)
-        if not odoobot_partner:
-            _logger.warning("   ⚠️ OdooBot partner not found")
-            return mail_ids
 
+        if not odoobot_partner:
+            _logger.warning("   ⚠️ OdooBot not found — using Admin user as fallback.")
+            odoobot_partner = self.env.user.partner_id
+
+        # 🧩 Get or create 'Inventory Alerts' channel
         channel = self.env.ref('low_stock_notification.mail_channel_inventory_alerts', raise_if_not_found=False)
         if not channel:
             channel = DiscussChannel.search([('name', '=', 'Inventory Alerts')], limit=1)
+
         if not channel:
-            _logger.warning("   ⚠️ Inventory Alerts channel not found")
-            return mail_ids
+            _logger.warning("   ⚠️ Inventory Alerts channel not found — creating one automatically.")
+            channel = DiscussChannel.create({
+                'name': 'Inventory Alerts',
+                'description': 'System-generated channel for low stock notifications.',
+                'public': 'private',
+                'channel_type': 'channel',
+            })
+            _logger.info(f"   ✅ Created new channel: {channel.name} (ID: {channel.id})")
 
-        _logger.info(f"   Channel: '{channel.name}' (ID: {channel.id})")
+        _logger.info(f"   Channel ready: '{channel.name}' (ID: {channel.id})")
 
+        # 🧩 Handle PDF attachment
         attachment_ids = []
         if pdf_attachment and pdf_attachment.exists():
-            attachment_ids = [(4, pdf_attachment.id)]
             attachment_ids = [pdf_attachment.id]
             _logger.info(f"   ✅ Will attach PDF: ID={pdf_attachment.id}")
         else:
-            _logger.warning("   ⚠️ No PDF attachment to attach!")
+            _logger.warning("   ⚠️ No PDF attachment to attach — continuing without file.")
 
         try:
             from markupsafe import Markup
             alert_type_label = min_quantity_based_on.replace('_', ' ').title()
             product_count = len(low_stock_products)
 
-            if pdf_attachment and pdf_attachment.exists():
-                pdf_html_link = f'<a href="/web/content/{pdf_attachment.id}?download=true" target="_blank">📄 Download Report</a>'
-            else:
-                pdf_html_link = "<i>(No report attached)</i>"
+            pdf_html_link = (
+                f'<a href="/web/content/{pdf_attachment.id}?download=true" target="_blank">📄 Download Report</a>'
+                if attachment_ids else "<i>(No report attached)</i>"
+            )
 
             body_message = Markup(f"""
                 <div style="font-family:'Segoe UI',sans-serif;font-size:14px;">
@@ -213,7 +222,7 @@ class ProductProduct(models.Model):
             """)
 
             _logger.info(f"   Posting message with {len(attachment_ids)} attachment(s)...")
-            
+
             channel.with_context(
                 mail_create_nosubscribe=True,
                 mail_create_nousermessage=True,
@@ -226,11 +235,11 @@ class ProductProduct(models.Model):
             )
 
             _logger.info("=" * 80)
-            _logger.info(f"✅ STEP 7 COMPLETE: Posted with {len(attachment_ids)} attachment(s)")
+            _logger.info(f"✅ STEP 7 COMPLETE: Posted successfully with {len(attachment_ids)} attachment(s)")
             _logger.info("=" * 80)
 
         except Exception as e:
-            _logger.error(f"   ❌ Failed to post message: {e}", exc_info=True)
+            _logger.error(f"   ❌ Failed to post message to Discuss: {e}", exc_info=True)
 
         _logger.info("\n🏁 FUNCTION END: check_low_stock_and_send_email\n")
         return mail_ids
