@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_company_form_inherit_low_stock" model="ir.ui.view">
+    <field name="name">res.company.form.low.stock</field>
+    <field name="model">res.company</field>
+    <!-- inherit the standard company form -->
+    <field name="inherit_id" ref="base.view_company_form"/>
+    <field name="arch" type="xml">
+      <!-- Insert a new notebook page right after the General Information page -->
+      <xpath expr="//page[@name='general_info']" position="after">
+        <page string="Low Stock Notification" name="low_stock_notification_page">
+          <group>
+            <group>
+              <!-- Enable/Disable toggle -->
+              <field name="low_stock_notification"
+                     string="Low Stock Notification?"
+                     help="Enable/Disable low stock notifications for this company"/>
+              <!-- Global minimum; hidden when feature disabled -->
+             <!-- <field name="low_stock_global_min"
+                    string="Global Low Stock Minimum"
+                    invisible="not low_stock_notification"
+                    help="Used when a product has no individual minimum and no orderpoint exists."/> -->
+            </group>
+          </group>
+        </page>
+      </xpath>
+    </field>
+  </record>
+</odoo>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_res_config_settings_inherit_stock_notification" model="ir.ui.view">
+        <field name="name">res.config.settings.view.inherit.stock.notification</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Insert our Product Stock Notification block AFTER the Warehouse block -->
+            <xpath expr="//block[@name='warehouse_setting_container']" position="after">
+                <block title="Product Stock Notification" name="product_stock_notification_container">
+                    <setting id="notification_based_on" string="Notification Based On" help="Choose whether stock notifications are based on On-hand or Forecast quantities.">
+                        <field name="notification_based_on" widget="radio"/>
+                    </setting>
+
+                    <setting id="min_quantity_based_on" string="Min Quantity Based On" help="Select how minimum quantities are applied (global, individual, or reorder rules).">
+                        <field name="min_quantity_based_on" widget="radio"/>
+                    </setting>
+
+                    <setting id="quantity_limit" string="Quantity Limit" invisible="min_quantity_based_on != 'global'" help="Set the minimum stock quantity that will trigger a notification.">
+                        <field name="quantity_limit"/>
+                    </setting>
+
+                    <setting id="apply_on" string="Apply On" help="Choose whether notifications apply to the product or product variant level.">
+                        <field name="apply_on" widget="radio"/>
+                    </setting>
+                </block>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

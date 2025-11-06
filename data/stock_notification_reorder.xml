@@ -1,0 +1,81 @@
+<odoo>
+    <record id="mail_template_low_stock_notification_reorder" model="mail.template">
+        <field name="name">Low Stock Notification Email (Reorder Rules)</field>
+        <field name="model_id" ref="base.model_res_company"/>
+        <field name="subject">Low stock of your products (Reorder Rule)</field>
+
+        <field name="email_from">{{ user.email or 'noreply@example.com' }}</field>
+
+        <field name="description">
+            Email sent automatically when products fall below their reorder rule minimum quantities.
+        </field>
+
+        <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Hello
+        <t t-if="ctx.get('recipient_name')">
+            <strong><t t-out="ctx.get('recipient_name') or ''">Inventory Manager</t></strong>
+        </t>
+        <t t-else="">
+            <strong>Inventory Manager</strong>
+        </t>,
+        <br /><br />
+        List of products that have less quantity than the minimum quantity specified in the <strong>Reorder Rules</strong>:
+        <br /><br />
+
+        <p>
+            <strong>Notification Based On:</strong>
+            <t t-if="ctx.get('notification_based_on') == 'on_hand'">On Hand Quantity</t>
+            <t t-else="">Forecast Quantity</t>
+        </p>
+
+        <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 12px;">
+            <thead style="background-color: #f0f0f0;">
+                <tr>
+                    <th style="text-align: left; padding: 8px;">Product Name</th>
+                    <th style="text-align: center; padding: 8px;">Reorder Rule Min Quantity</th>
+                    <t t-if="ctx.get('notification_based_on') == 'on_hand'">
+                        <th style="text-align: center; padding: 8px;">On Hand Quantity</th>
+                    </t>
+                    <t t-else="">
+                        <th style="text-align: center; padding: 8px;">Forecast Quantity</th>
+                    </t>
+                    <th style="text-align: center; padding: 8px;">Required Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                <t t-if="ctx.get('low_stock_products')">
+                    <t t-foreach="ctx.get('low_stock_products', [])" t-as="product">
+                        <tr>
+                            <td style="padding: 8px;"><t t-out="product.get('name', '')">Product Name</t></td>
+                            <td style="text-align: center; padding: 8px;"><t t-out="product.get('quantity_limit', 0.0)">100.0</t></td>
+                            <t t-if="ctx.get('notification_based_on') == 'on_hand'">
+                                <td style="text-align: center; padding: 8px;"><t t-out="product.get('qty_available', 0.0)">50.0</t></td>
+                            </t>
+                            <t t-else="">
+                                <td style="text-align: center; padding: 8px;"><t t-out="product.get('forecast_qty', 0.0)">60.0</t></td>
+                            </t>
+                            <td style="text-align: center; padding: 8px;"><t t-out="product.get('required_qty', 0.0)">40.0</t></td>
+                        </tr>
+                    </t>
+                </t>
+                <t t-else="">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 8px;">No low stock products found</td>
+                    </tr>
+                </t>
+            </tbody>
+        </table>
+
+        <br />
+        Best regards,<br />
+        <strong><t t-out="object.name or ''">Inventory Notification System</t></strong>
+    </p>
+</div>
+        </field>
+
+        <field name="report_template_ids" eval="[(4, ref('low_stock_notification.action_low_stock_report'))]"/>
+        <field name="auto_delete" eval="True"/>
+    </record>
+</odoo>

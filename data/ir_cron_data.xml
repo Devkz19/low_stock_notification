@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="ir_cron_low_stock_email" model="ir.cron">
+        <field name="name">Low Stock Notification Email</field>
+        <field name="model_id" ref="product.model_product_product"/>
+        <field name="state">code</field>
+        <field name="code">model.check_low_stock_and_send_email()</field>
+
+        <!-- Schedule -->
+        <field name="interval_number">1</field>   
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+        <field name="priority">10</field>
+
+    </record>
+</odoo>

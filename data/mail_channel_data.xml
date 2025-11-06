@@ -1,0 +1,37 @@
+<odoo>
+    <data noupdate="1">
+
+        <!-- ✅ Inventory Alerts Discuss Channel -->
+        <record id="mail_channel_inventory_alerts" model="discuss.channel">
+            <field name="name">Inventory Alerts</field>
+            <field name="description">
+                This channel automatically receives low stock notifications 
+                (Global, Individual, and Reorder Rules).
+            </field>
+            <field name="channel_type">channel</field>
+        </record>
+
+        <!-- ✅ Add Admin as Channel Member -->
+        <record id="mail_channel_inventory_alerts_admin_member" model="discuss.channel.member">
+            <field name="channel_id" ref="mail_channel_inventory_alerts"/>
+            <field name="partner_id" ref="base.partner_admin"/>
+    
+        </record>
+
+        <!-- ✅ Default Welcome Message -->
+        <record id="mail_message_inventory_alerts_welcome" model="mail.message">
+            <field name="model">discuss.channel</field>
+            <field name="res_id" ref="mail_channel_inventory_alerts"/>
+            <field name="message_type">comment</field>
+            <field name="subtype_id" ref="mail.mt_comment"/>
+            <field name="author_id" ref="base.partner_admin"/>
+            <field name="body"><![CDATA[
+                <p><strong>👋 Welcome to the Inventory Alerts Channel!</strong></p>
+                <p>This channel automatically receives <b>Low Stock Alerts</b> when any product quantity 
+                falls below the defined minimum threshold.</p>
+                <p><i>All messages here are generated automatically by the system.</i></p>
+            ]]></field>
+        </record>
+
+    </data>
+</odoo>

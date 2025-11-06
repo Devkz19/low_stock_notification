@@ -1,0 +1,38 @@
+<odoo>
+    <record id="mail_template_low_stock_notification" model="mail.template">
+        <field name="name">Low Stock Notification Email</field>
+        <field name="model_id" ref="base.model_res_company"/>
+        <field name="subject">[Low Stock Alert] Products Below Minimum Quantity</field>
+
+        <field name="email_from">{{ user.email or 'noreply@example.com' }}</field>
+        
+        <field name="description">
+            Email sent automatically when products fall below the defined minimum quantity.
+        </field>
+
+        <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Dear
+        <t t-if="ctx.get('recipient_name')">
+            <strong><t t-out="ctx.get('recipient_name') or ''">Inventory Manager</t></strong>
+        </t>
+        <t t-else="">
+            <strong>Inventory Manager</strong>
+        </t>,
+        <br /><br />
+        The system has detected that some products have fallen below the defined minimum quantity.
+        <br /><br />
+        Please find attached a detailed report listing all low-stock products.
+        <br /><br />
+        Kindly review and restock the affected items.
+        <br /><br />
+        Best regards,<br />
+        <strong><t t-out="object.name or ''">Inventory Notification System</t></strong>
+    </p>
+</div>
+        </field>
+        <field name="report_template_ids" eval="[(4, ref('low_stock_notification.action_low_stock_report'))]"/>
+        <field name="auto_delete" eval="True"/>
+    </record>
+</odoo>

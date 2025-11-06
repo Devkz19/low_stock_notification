@@ -1,0 +1,59 @@
+<odoo>
+  <template id="low_stock_report_template">
+    <t t-call="web.html_container">
+      <t t-call="web.external_layout">
+
+        <!-- <div class="row">
+          <div class="col-12" style="text-align:left;">
+            <t t-if="company.logo">
+              <img t-att-src="'data:image/png;base64,%s' % company.logo" style="height:80px;"/>
+            </t>
+            <p>
+              <t t-esc="company.city"/> , <t t-esc="company.zip"/><br/>
+              <t t-esc="company.state_id.name"/>, <t t-esc="company.country_id.name"/>
+            </p>
+          </div>
+        </div> -->
+
+        <h2 style="text-align:center; margin-top:10px; color:black;">
+          Low Stock Report
+          (<t t-esc="apply_on == 'product' and 'Product' or 'Product Variant'"/> |
+           Based On: <t t-esc="notification_based_on == 'on_hand' and 'On-hand Quantity' or 'Forecast Quantity'"/>)
+        </h2>
+
+        <table class="table table-sm table-bordered" style="width:100%; border-collapse:collapse; margin-top:15px;">
+          <thead>
+            <tr style="background-color:#f2f2f2;">
+              <th>Name</th>
+              <th>Minimum Quantity</th>
+              <th t-if="notification_based_on == 'on_hand'">On Hand Qty</th>
+              <th t-if="notification_based_on == 'forecast'">Forecast Qty</th>
+              <th>Required Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <t t-foreach="docs" t-as="p">
+              <tr>
+                <td><t t-esc="p['name']"/></td>
+                <td><t t-esc="p['quantity_limit']"/></td>
+                <td t-if="notification_based_on == 'on_hand'"><t t-esc="p['qty_available']"/></td>
+                <td t-if="notification_based_on == 'forecast'"><t t-esc="p['forecast_qty']"/></td>
+                <td><t t-esc="p['required_qty']"/></td>
+              </tr>
+            </t>
+          </tbody>
+        </table>
+
+      </t>
+    </t>
+  </template>
+
+  <record id="action_low_stock_report" model="ir.actions.report">
+      <field name="name">Low Stock Report</field>
+      <field name="model">product.product</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">low_stock_notification.low_stock_report_template</field>
+      <field name="report_file">low_stock_notification.low_stock_report_template</field>
+      <field name="print_report_name">'Low_Stock_Report_' + (object.name or '')</field>
+  </record>
+</odoo>
