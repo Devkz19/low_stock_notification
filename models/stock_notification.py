@@ -1,6 +1,7 @@
 from odoo import api, models
 import base64
 import logging
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
@@ -66,26 +67,20 @@ class ProductProduct(models.Model):
 
         pdf_attachment = None
         try:
-            # ✅ Get the report XML ID
             report_xmlid = 'low_stock_notification.action_low_stock_report'
-            
-            # ✅ Fetch the report action record (for logging only)
             report_action = self.env.ref(report_xmlid)
             _logger.info(f"   ✅ Report action found: {report_action.report_name}")
 
-            # ✅ CORRECT for Odoo 19: Pass report_ref as first positional argument
             pdf_bytes, _ = self.env['ir.actions.report']._render_qweb_pdf(
-                report_xmlid,  # report_ref (required positional argument)
-                res_ids=[],    # res_ids (keyword argument)
-                data={}        # data (keyword argument)
+                report_xmlid,
+                res_ids=[],
+                data={}
             )
             _logger.info(f"   ✅ PDF generated successfully — size: {len(pdf_bytes)} bytes")
 
-            # ✅ Encode PDF content
             pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
             attachment_name = f"Low_Stock_Report_{company.name or 'Company'}.pdf"
 
-            # ✅ Create ir.attachment for Discuss
             pdf_attachment = self.env['ir.attachment'].create({
                 'name': attachment_name,
                 'type': 'binary',
@@ -123,7 +118,7 @@ class ProductProduct(models.Model):
                 }
 
                 _logger.info(f"   Sending email to {user.name} with attachment: {pdf_attachment.id if pdf_attachment else 'NONE'}")
-                
+
                 mail_id = template.with_context(**email_context).send_mail(
                     res_id=company.id,
                     force_send=True,
@@ -139,100 +134,92 @@ class ProductProduct(models.Model):
             except Exception as e:
                 _logger.error(f"   ❌ Failed to send email to {user.email}: {e}")
 
+        # ✅ 6.5 Remove duplicate mail.message attachments created by Odoo
+        if mail_ids and pdf_attachment:
+            self.remove_mail_message_duplicate_by_name(mail_ids, pdf_attachment.name)
+
         # ✅ 7. Post Discuss Notification
         _logger.info("\n" + "=" * 80)
         _logger.info("💬 STEP 7: POSTING TO DISCUSS CHANNEL")
         _logger.info("=" * 80)
-        _logger.info(f"   pdf_attachment = {pdf_attachment}")
-        _logger.info(f"   pdf_attachment is None: {pdf_attachment is None}")
 
         Partner = self.env['res.partner'].sudo()
         ICP = self.env['ir.config_parameter'].sudo()
         DiscussChannel = self.env['discuss.channel'].sudo()
 
-        # 🧩 Ensure Discuss module is available
         if 'discuss.channel' not in self.env:
-            _logger.warning("   ⚠️ Discuss module not installed — skipping message post.")
+            _logger.warning("⚠️ Discuss module not installed — skipping message post.")
             return mail_ids
 
-        # 🧩 Get or create OdooBot partner
         odoobot_partner = False
         odoobot_id = ICP.get_param('mail.odoobot_partner_id')
         if odoobot_id:
             odoobot_partner = Partner.browse(int(odoobot_id)).exists()
-
         if not odoobot_partner:
             odoobot_partner = Partner.search([('name', '=', 'OdooBot')], limit=1)
-
         if not odoobot_partner:
-            _logger.warning("   ⚠️ OdooBot not found — using Admin user as fallback.")
             odoobot_partner = self.env.user.partner_id
 
-        # 🧩 Get or create 'Inventory Alerts' channel
         channel = self.env.ref('low_stock_notification.mail_channel_inventory_alerts', raise_if_not_found=False)
         if not channel:
             channel = DiscussChannel.search([('name', '=', 'Inventory Alerts')], limit=1)
-
         if not channel:
-            _logger.warning("   ⚠️ Inventory Alerts channel not found — creating one automatically.")
             channel = DiscussChannel.create({
                 'name': 'Inventory Alerts',
                 'description': 'System-generated channel for low stock notifications.',
                 'public': 'private',
                 'channel_type': 'channel',
             })
-            _logger.info(f"   ✅ Created new channel: {channel.name} (ID: {channel.id})")
+            _logger.info(f"✅ Created new channel: {channel.name} (ID: {channel.id})")
 
-        _logger.info(f"   Channel ready: '{channel.name}' (ID: {channel.id})")
+        attachment_ids = [pdf_attachment.id] if pdf_attachment and pdf_attachment.exists() else []
+        body_message = Markup(f"""
+            <div style="font-family:'Segoe UI',sans-serif;font-size:14px;">
+                <p><strong>⚠️ Low Stock Alert ({min_quantity_based_on.replace('_', ' ').title()})</strong></p>
+                <p>{len(low_stock_products)} product(s) below minimum stock level.</p>
+            </div>
+        """)
 
-        # 🧩 Handle PDF attachment
-        attachment_ids = []
-        if pdf_attachment and pdf_attachment.exists():
-            attachment_ids = [pdf_attachment.id]
-            _logger.info(f"   ✅ Will attach PDF: ID={pdf_attachment.id}")
-        else:
-            _logger.warning("   ⚠️ No PDF attachment to attach — continuing without file.")
+        channel.with_context(mail_create_nosubscribe=True, mail_create_nousermessage=True).message_post(
+            body=body_message,
+            message_type='comment',
+            subtype_xmlid='mail.mt_comment',
+            author_id=odoobot_partner.id,
+            attachment_ids=attachment_ids,
+        )
 
-        try:
-            from markupsafe import Markup
-            alert_type_label = min_quantity_based_on.replace('_', ' ').title()
-            product_count = len(low_stock_products)
-
-            pdf_html_link = (
-                f'<a href="/web/content/{pdf_attachment.id}?download=true" target="_blank">📄 Download Report</a>'
-                if attachment_ids else "<i>(No report attached)</i>"
-            )
-
-            body_message = Markup(f"""
-                <div style="font-family:'Segoe UI',sans-serif;font-size:14px;">
-                    <p><strong>⚠️ Low Stock Alert ({alert_type_label})</strong></p>
-                    <p>{product_count} product(s) below minimum stock level.</p>
-                    <p>📎 {pdf_html_link}</p>
-                </div>
-            """)
-
-            _logger.info(f"   Posting message with {len(attachment_ids)} attachment(s)...")
-
-            channel.with_context(
-                mail_create_nosubscribe=True,
-                mail_create_nousermessage=True,
-            ).message_post(
-                body=body_message,
-                message_type='comment',
-                subtype_xmlid='mail.mt_comment',
-                author_id=odoobot_partner.id,
-                attachment_ids=attachment_ids,
-            )
-
-            _logger.info("=" * 80)
-            _logger.info(f"✅ STEP 7 COMPLETE: Posted successfully with {len(attachment_ids)} attachment(s)")
-            _logger.info("=" * 80)
-
-        except Exception as e:
-            _logger.error(f"   ❌ Failed to post message to Discuss: {e}", exc_info=True)
-
+        _logger.info(f"✅ STEP 7 COMPLETE: Posted successfully with {len(attachment_ids)} attachment(s)")
         _logger.info("\n🏁 FUNCTION END: check_low_stock_and_send_email\n")
         return mail_ids
+
+    # ✅ Helper Method: Remove duplicate mail.message attachments
+    @api.model
+    def remove_mail_message_duplicate_by_name(self, mail_ids, attachment_name):
+        """Safely remove duplicate mail.message attachments created by Odoo when sending mail."""
+        Attachment = self.env['ir.attachment']
+        Mail = self.env['mail.mail']
+        deleted_count = 0
+
+        for mail_id in mail_ids:
+            mail = Mail.browse(mail_id)
+            mail_message = getattr(mail, 'mail_message_id', False) or getattr(mail, 'message_id', False)
+            if not mail_message:
+                _logger.warning(f"⚠️ No mail.message found for mail.mail id={mail_id}")
+                continue
+
+            duplicates = Attachment.search([
+                ('res_model', '=', 'mail.message'),
+                ('res_id', '=', mail_message.id),
+                ('name', '=', attachment_name),
+            ])
+            if duplicates:
+                _logger.info(f"🗑️ Removing {len(duplicates)} duplicate mail.message attachments "
+                             f"(mail_message id={mail_message.id}): {duplicates.ids}")
+                deleted_count += len(duplicates)
+                duplicates.unlink()
+
+        _logger.info(f"✅ Duplicate cleanup complete — {deleted_count} attachments removed.")
+
 
                 
                 
