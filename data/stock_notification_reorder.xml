@@ -2,7 +2,7 @@
     <record id="mail_template_low_stock_notification_reorder" model="mail.template">
         <field name="name">Low Stock Notification Email (Reorder Rules)</field>
         <field name="model_id" ref="base.model_res_company"/>
-        <field name="subject">Low stock of your products (Reorder Rule)</field>
+        <field name="subject">Low stock of your products</field>
 
         <field name="email_from">{{ user.email or 'noreply@example.com' }}</field>
 

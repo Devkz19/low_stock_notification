@@ -176,7 +176,7 @@ class ProductProduct(models.Model):
         body_message = Markup(f"""
             <div style="font-family:'Segoe UI',sans-serif;font-size:14px;">
                 <p><strong>⚠️ Low Stock Alert ({min_quantity_based_on.replace('_', ' ').title()})</strong></p>
-                <p>{len(low_stock_products)} product(s) below minimum stock level.</p>
+                <p>{len(low_stock_products)} product(s) below minimum stock level on basis of {(notification_based_on.replace('_', ' ').title())} quantity.</p>
             </div>
         """)
 
