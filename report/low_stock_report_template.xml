@@ -34,7 +34,15 @@
           <tbody>
             <t t-foreach="docs" t-as="p">
               <tr>
-                <td><t t-esc="p['name']"/></td>
+                <td>
+                  <t t-if="apply_on in ('variant', 'product_variant', 'product.product')">
+                    <t t-esc="p.get('product_tmpl_name', p['name'])"/>
+                    <t t-if="p.get('variant_values')"> (<t t-esc="p['variant_values']"/>)</t>
+                  </t>
+                  <t t-else="">
+                    <t t-esc="p['name']"/>
+                  </t>
+                </td>
                 <td><t t-esc="p['quantity_limit']"/></td>
                 <td t-if="notification_based_on == 'on_hand'"><t t-esc="p['qty_available']"/></td>
                 <td t-if="notification_based_on == 'forecast'"><t t-esc="p['forecast_qty']"/></td>
