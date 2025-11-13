@@ -20,20 +20,14 @@ class ReportLowStock(models.AbstractModel):
         company = self.env.company
         low_stock_products = []
 
-        # Choose quantity field based on notification setting
         qty_field = 'qty_available' if notification_based_on == 'on_hand' else 'virtual_available'
 
         # ====================================================
-        # 1. Global Minimum Quantity Logic
+        # 1️⃣ Global Minimum Quantity Logic
         # ====================================================
         if min_quantity_based_on == 'global' and quantity_limit > 0:
             _logger.info(f"Global min quantity check started | Apply on: {apply_on} | Limit: {quantity_limit}")
 
-            low_stock_products = []
-
-            # ------------------------------------------------
-            # Apply on Product (aggregate all variants)
-            # ------------------------------------------------
             if apply_on == 'product':
                 templates = self.env['product.template'].search([('active', '=', True)])
                 _logger.info(f"Fetched {len(templates)} active product templates for global product check")
@@ -42,14 +36,11 @@ class ReportLowStock(models.AbstractModel):
                     active_variants = p.product_variant_ids.filtered(lambda v: v.active)
                     qty_available = sum(active_variants.mapped('qty_available'))
                     virtual_available = sum(active_variants.mapped('virtual_available'))
-
                     qty_to_check = qty_available if notification_based_on == 'on_hand' else virtual_available
 
-                    # ✅ Only include products whose total (on hand / forecast) is below the global limit
                     if qty_to_check < quantity_limit:
                         internal_ref = p.default_code or ''
                         display_name = f"[{internal_ref}] {p.name}" if internal_ref else p.name
-
                         product_data = {
                             'name': display_name,
                             'quantity_limit': quantity_limit,
@@ -58,21 +49,13 @@ class ReportLowStock(models.AbstractModel):
                             'required_qty': round(quantity_limit - qty_to_check, 2),
                         }
                         low_stock_products.append(product_data)
+                        _logger.info(f"[PRODUCT] {display_name} | On hand: {qty_available} | Forecast: {virtual_available} | Limit: {quantity_limit}")
 
-                        _logger.info(
-                            f"[PRODUCT] {display_name} | On hand: {qty_available} | "
-                            f"Forecast: {virtual_available} | Limit: {quantity_limit}"
-                        )
-
-            # ------------------------------------------------
-            # Apply on Variant (check each product variant)
-            # ------------------------------------------------
             else:
-                domain = [
+                products = self.env['product.product'].search([
                     ('active', '=', True),
                     (qty_field, '<', quantity_limit),
-                ]
-                products = self.env['product.product'].search(domain)
+                ])
                 _logger.info(f"Found {len(products)} variants below global limit {quantity_limit}")
 
                 for p in products:
@@ -82,9 +65,14 @@ class ReportLowStock(models.AbstractModel):
 
                     internal_ref = p.default_code or ''
                     display_name = f"[{internal_ref}] {p.name}" if internal_ref else p.name
+                    variant_values = ', '.join(
+                        [f"{v.attribute_id.name}: {v.name}" for v in p.product_template_attribute_value_ids.mapped('product_attribute_value_id')]
+                    ) or ''
 
                     product_data = {
                         'name': display_name,
+                        'product_tmpl_name': p.product_tmpl_id.name,
+                        'variant_values': variant_values,
                         'quantity_limit': quantity_limit,
                         'qty_available': round(qty_available, 2),
                         'forecast_qty': round(virtual_available, 2),
@@ -92,35 +80,27 @@ class ReportLowStock(models.AbstractModel):
                     }
                     low_stock_products.append(product_data)
 
-                    _logger.info(
-                        f"[VARIANT] {display_name} | On hand: {qty_available} | "
-                        f"Forecast: {virtual_available} | Limit: {quantity_limit}"
-                    )
-
-            _logger.info(f"✅ Total low stock products found: {len(low_stock_products)}")
-
+                    _logger.info(f"[VARIANT] {display_name} ({variant_values}) | On hand: {qty_available} | Forecast: {virtual_available} | Limit: {quantity_limit}")
 
         # ====================================================
-        # 2 Individual Minimum Quantity Logic
+        # 2️⃣ Individual Minimum Quantity Logic
         # ====================================================
         elif min_quantity_based_on == 'individual':
             if apply_on == 'product':
-                domain = [
+                products = self.env['product.template'].search([
                     ('active', '=', True),
                     ('minimum_quantity', '>', 0),
-                ]
-                products = self.env['product.template'].search(domain)
-            else:  # variant
-                domain = [
+                ])
+            else:
+                products = self.env['product.product'].search([
                     ('active', '=', True),
                     ('minimum_quantity', '>', 0),
-                ]
-                products = self.env['product.product'].search(domain)
+                ])
 
             _logger.info(f"Found {len(products)} items with individual minimum quantity")
 
             for p in products:
-                if apply_on == 'product' and hasattr(p, 'product_variant_ids'):
+                if apply_on == 'product':
                     active_variants = p.product_variant_ids.filtered(lambda v: v.active)
                     qty_available = sum(active_variants.mapped('qty_available'))
                     virtual_available = sum(active_variants.mapped('virtual_available'))
@@ -134,19 +114,28 @@ class ReportLowStock(models.AbstractModel):
                 if qty_to_check < min_qty:
                     internal_ref = p.default_code or ''
                     display_name = f"[{internal_ref}] {p.name}" if internal_ref else p.name
+
+                    variant_values = ''
+                    if apply_on != 'product':
+                        variant_values = ', '.join(
+                            [f"{v.attribute_id.name}: {v.name}" for v in p.product_template_attribute_value_ids.mapped('product_attribute_value_id')]
+                        ) or ''
+
                     product_data = {
                         'name': display_name,
+                        'product_tmpl_name': getattr(p, 'product_tmpl_id', p).name,
+                        'variant_values': variant_values,
                         'quantity_limit': min_qty,
                         'qty_available': round(qty_available, 2),
                         'forecast_qty': round(virtual_available, 2),
                         'required_qty': round(min_qty - qty_to_check, 2),
                     }
                     low_stock_products.append(product_data)
-                    _logger.info(
-                        f"Low stock product: {display_name} | On Hand: {qty_available} | Forecast: {virtual_available} ||Min Qty: {min_qty}")
+
+                    _logger.info(f"[INDIVIDUAL] {display_name} ({variant_values}) | On hand: {qty_available} | Forecast: {virtual_available} | Min Qty: {min_qty}")
 
         # ====================================================
-        # 3 Reorder Rule Logic
+        # 3️⃣ Reorder Rule Logic
         # ====================================================
         elif min_quantity_based_on == 'reorder_rules':
             reorder_rules = self.env['stock.warehouse.orderpoint'].search([('active', '=', True)])
@@ -157,18 +146,22 @@ class ReportLowStock(models.AbstractModel):
                 if not product or not product.active:
                     continue
 
-                # ✅ Use rule-level quantities (warehouse-specific)
                 qty_on_hand = rule.qty_on_hand
                 qty_forecast = rule.qty_forecast
                 qty_to_check = qty_on_hand if notification_based_on == 'on_hand' else qty_forecast
-
                 min_qty = rule.product_min_qty or 0.0
 
                 if qty_to_check < min_qty:
                     internal_ref = product.default_code or ''
                     display_name = f"[{internal_ref}] {product.display_name}" if internal_ref else product.display_name
+                    variant_values = ', '.join(
+                        [f"{v.attribute_id.name}: {v.name}" for v in product.product_template_attribute_value_ids.mapped('product_attribute_value_id')]
+                    ) or ''
+
                     product_data = {
                         'name': display_name,
+                        'product_tmpl_name': product.product_tmpl_id.name,
+                        'variant_values': variant_values,
                         'quantity_limit': round(min_qty, 2),
                         'qty_available': round(qty_on_hand, 2),
                         'forecast_qty': round(qty_forecast, 2),
@@ -176,23 +169,20 @@ class ReportLowStock(models.AbstractModel):
                     }
                     low_stock_products.append(product_data)
 
-                    _logger.info(
-                        f"Low stock (Reorder Rule): {display_name} | On Hand: {qty_on_hand} | "
-                        f"Forecast: {qty_forecast} | Min Qty: {min_qty}"
-                    )
+                    _logger.info(f"[REORDER] {display_name} ({variant_values}) | On hand: {qty_on_hand} | Forecast: {qty_forecast} | Min Qty: {min_qty}")
 
         # ====================================================
-        # Finalization
+        # ✅ Finalization
         # ====================================================
         low_stock_products = sorted(low_stock_products, key=lambda x: x['name'])
-        _logger.info(f"Total low stock products found: {len(low_stock_products)}")
+        _logger.info(f"✅ Total low stock products found: {len(low_stock_products)}")
 
         return {
             'doc_ids': docids,
             'doc_model': 'product.product',
             'docs': low_stock_products,
             'company': company,
-            'res_company': company, 
+            'res_company': company,
             'notification_based_on': notification_based_on,
             'quantity_limit': quantity_limit,
             'apply_on': apply_on,
