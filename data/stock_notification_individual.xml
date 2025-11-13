@@ -48,7 +48,17 @@
                 <t t-if="ctx.get('low_stock_products')">
                     <t t-foreach="ctx.get('low_stock_products', [])" t-as="product">
                         <tr>
-                            <td style="padding: 8px;"><t t-out="product.get('name', '')">Product Name</t></td>
+                            <td style="padding: 8px;">
+                                <t t-if="product.get('variant_values')">
+                                <t t-out="product.get('product_tmpl_name', product.get('name', ''))"/>
+                                <span style="color: #666; font-style: italic;">
+                                    (<t t-out="product.get('variant_values')"/>)
+                                </span>
+                                </t>
+                                <t t-else="">
+                                <t t-out="product.get('name', '')"/>
+                                </t>
+                            </td>
                             <td style="text-align: center; padding: 8px;"><t t-out="product.get('quantity_limit', 0.0)">100.0</t></td>
                             <t t-if="ctx.get('notification_based_on') == 'on_hand'">
                                 <td style="text-align: center; padding: 8px;"><t t-out="product.get('qty_available', 0.0)">50.0</t></td>
@@ -76,7 +86,7 @@
 </div>
         </field>
 
-        <field name="report_template_ids" eval="[(4, ref('low_stock_notification.action_low_stock_report'))]"/>
+        <!-- <field name="report_template_ids" eval="[(4, ref('low_stock_notification.action_low_stock_report'))]"/> -->
         <field name="auto_delete" eval="True"/>
     </record>
 </odoo>
